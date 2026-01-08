@@ -4,8 +4,10 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
-// Mapbox access token
-mapboxgl.accessToken = 'pk.eyJ1Ijoic3JtNzQ3MDEiLCJhIjoiY21rNXppNjdkMG42MTNmcHQ5bno4OGVqcSJ9.zBjj1qRNuqARjyRdaTuIOQ';
+// Mapbox access token from environment variable with fallback
+// In production, set NEXT_PUBLIC_MAPBOX_TOKEN environment variable
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1Ijoic3JtNzQ3MDEiLCJhIjoiY21rNXppNjdkMG42MTNmcHQ5bno4OGVqcSJ9.zBjj1qRNuqARjyRdaTuIOQ';
+mapboxgl.accessToken = MAPBOX_TOKEN;
 
 interface LakeMapProps {
   coordinates: { lat: number; lng: number };
@@ -214,33 +216,42 @@ export default function LakeMap({
         wildlife: '🦌',
       };
 
-      markerEl.innerHTML = `
-        <div style="
-          background: ${iconColors[poi.type]};
-          width: 32px;
-          height: 32px;
-          border-radius: 50%;
-          border: 3px solid white;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-          font-size: 16px;
-          cursor: pointer;
-        ">
-          ${icons[poi.type]}
-        </div>
+      // Create marker element using DOM manipulation (not innerHTML) to avoid XSS
+      const iconDiv = document.createElement('div');
+      iconDiv.style.cssText = `
+        background: ${iconColors[poi.type]};
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: 3px solid white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        font-size: 16px;
+        cursor: pointer;
       `;
+      iconDiv.textContent = icons[poi.type];
+      markerEl.appendChild(iconDiv);
+
+      // Create popup content using DOM manipulation to avoid XSS
+      const popupContent = document.createElement('div');
+      popupContent.style.padding = '8px';
+      
+      const titleEl = document.createElement('strong');
+      titleEl.style.fontSize = '14px';
+      titleEl.textContent = poi.name;
+      popupContent.appendChild(titleEl);
+      
+      const descEl = document.createElement('p');
+      descEl.style.cssText = 'margin: 4px 0 0 0; font-size: 12px; color: #666;';
+      descEl.textContent = poi.description;
+      popupContent.appendChild(descEl);
 
       new mapboxgl.Marker(markerEl)
         .setLngLat(poi.position)
         .setPopup(
-          new mapboxgl.Popup({ offset: 25 }).setHTML(`
-            <div style="padding: 8px;">
-              <strong style="font-size: 14px;">${poi.name}</strong>
-              <p style="margin: 4px 0 0 0; font-size: 12px; color: #666;">${poi.description}</p>
-            </div>
-          `)
+          new mapboxgl.Popup({ offset: 25 }).setDOMContent(popupContent)
         )
         .addTo(map);
     });

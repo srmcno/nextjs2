@@ -36,10 +36,11 @@ export default function USGSWaterData({ siteId, normalPoolElevation }: USGSWater
       // USGS Water Services API: https://waterservices.usgs.gov/nwis/iv/
       // Parameter code 62614 = Lake or reservoir water surface elevation above NGVD 1929
       // Parameter code 00065 = Gage height, feet
+      // Note: CORS may block this request in browser environments.
+      // For production, consider using a backend API proxy or Next.js API routes.
       const response = await fetch(
         `https://waterservices.usgs.gov/nwis/iv/?format=json&sites=${siteId}&parameterCd=62614,00065&period=P1D`,
         { 
-          mode: 'cors',
           headers: {
             'Accept': 'application/json',
           },
@@ -76,7 +77,10 @@ export default function USGSWaterData({ siteId, normalPoolElevation }: USGSWater
       // Fallback to simulated data if API call fails
       throw new Error('Using simulated data');
       
-    } catch {
+    } catch (err) {
+      // Log the error for debugging purposes
+      console.debug('USGS API unavailable, using simulated data:', err instanceof Error ? err.message : 'Unknown error');
+      
       // Use simulated realistic data for Sardis Lake
       // Actual current pool elevation is typically around 598-599 ft
       const simulatedLevel = 598.42 + (Math.random() * 0.5 - 0.25);
