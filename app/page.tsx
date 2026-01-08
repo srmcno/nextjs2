@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { MapPin, Layers, TrendingUp, Building2, Droplets, Fish, TreePine, Mountain, ChevronDown, ChevronUp, Info, Download, Settings, BarChart3, Map, Navigation, Ruler, AlertTriangle, Sun, Cloud, Wind, Activity, Database, FileText, Camera, Share2, Bookmark, Search, Filter, Eye, EyeOff, Plus, Minus, Crosshair, Globe, Compass, LayoutGrid, Maximize2 } from 'lucide-react';
+import { MapPin, Layers, TrendingUp, Building2, Droplets, Fish, TreePine, Mountain, Info, Download, Settings, BarChart3, Map, Navigation, Ruler, AlertTriangle, Sun, Wind, Activity, Database, FileText, Camera, Share2, Bookmark, Search, Eye, Plus, Minus, Crosshair, Globe, LayoutGrid, Maximize2 } from 'lucide-react';
 
 // Sardis Lake Data
 const SARDIS_LAKE_DATA = {
@@ -89,6 +89,7 @@ export default function LakeAnalysisPlatform() {
   const [simulationRunning, setSimulationRunning] = useState(false);
   const [mapZoom, setMapZoom] = useState(1);
   const [mapPan, setMapPan] = useState({ x: 0, y: 0 });
+  const [showHelp, setShowHelp] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Export functions
@@ -206,6 +207,80 @@ export default function LakeAnalysisPlatform() {
   const centerMap = () => {
     setMapPan({ x: 0, y: 0 });
   };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      switch(e.key.toLowerCase()) {
+        case '?':
+          e.preventDefault();
+          setShowHelp(!showHelp);
+          break;
+        case '+':
+        case '=':
+          e.preventDefault();
+          zoomIn();
+          break;
+        case '-':
+        case '_':
+          e.preventDefault();
+          zoomOut();
+          break;
+        case 'r':
+          e.preventDefault();
+          resetView();
+          break;
+        case 'c':
+          e.preventDefault();
+          centerMap();
+          break;
+        case '1':
+          e.preventDefault();
+          setActiveTab('overview');
+          break;
+        case '2':
+          e.preventDefault();
+          setActiveTab('elevation');
+          break;
+        case '3':
+          e.preventDefault();
+          setActiveTab('economic');
+          break;
+        case '4':
+          e.preventDefault();
+          setActiveTab('planning');
+          break;
+        case '5':
+          e.preventDefault();
+          setActiveTab('water');
+          break;
+        case '6':
+          e.preventDefault();
+          setActiveTab('analysis');
+          break;
+        case 'e':
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            exportToCSV();
+          }
+          break;
+        case 's':
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            saveCurrentView();
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [showHelp]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Calculate flood impact
   const calculateFloodImpact = useCallback((elevation: number) => {
@@ -1109,12 +1184,57 @@ export default function LakeAnalysisPlatform() {
                 className="bg-slate-800/50 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500 w-64"
               />
             </div>
-            <button className="p-2 rounded-lg bg-slate-800/50 border border-slate-700 hover:border-emerald-500/50 transition-colors">
+            <button 
+              onClick={() => setShowHelp(!showHelp)}
+              className="p-2 rounded-lg bg-slate-800/50 border border-slate-700 hover:border-emerald-500/50 transition-colors"
+              title="Keyboard Shortcuts (Press ? to toggle)"
+            >
               <Settings className="w-5 h-5 text-slate-400" />
             </button>
           </div>
         </div>
       </header>
+
+      {/* Help Modal */}
+      {showHelp && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => setShowHelp(false)}>
+          <div className="bg-slate-900 border border-slate-700 rounded-lg max-w-2xl w-full p-6 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-emerald-400">Keyboard Shortcuts</h2>
+              <button onClick={() => setShowHelp(false)} className="text-slate-400 hover:text-slate-200">✕</button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold text-emerald-400 mb-2">Map Controls</h3>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between"><kbd className="px-2 py-1 bg-slate-800 rounded">+</kbd><span className="text-slate-400">Zoom In</span></div>
+                  <div className="flex justify-between"><kbd className="px-2 py-1 bg-slate-800 rounded">-</kbd><span className="text-slate-400">Zoom Out</span></div>
+                  <div className="flex justify-between"><kbd className="px-2 py-1 bg-slate-800 rounded">R</kbd><span className="text-slate-400">Reset View</span></div>
+                  <div className="flex justify-between"><kbd className="px-2 py-1 bg-slate-800 rounded">C</kbd><span className="text-slate-400">Center Map</span></div>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-emerald-400 mb-2">Navigation</h3>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between"><kbd className="px-2 py-1 bg-slate-800 rounded">1</kbd><span className="text-slate-400">Overview Tab</span></div>
+                  <div className="flex justify-between"><kbd className="px-2 py-1 bg-slate-800 rounded">2</kbd><span className="text-slate-400">Elevation Tab</span></div>
+                  <div className="flex justify-between"><kbd className="px-2 py-1 bg-slate-800 rounded">3</kbd><span className="text-slate-400">Economic Tab</span></div>
+                  <div className="flex justify-between"><kbd className="px-2 py-1 bg-slate-800 rounded">4</kbd><span className="text-slate-400">Land Planning Tab</span></div>
+                  <div className="flex justify-between"><kbd className="px-2 py-1 bg-slate-800 rounded">5</kbd><span className="text-slate-400">Water Data Tab</span></div>
+                  <div className="flex justify-between"><kbd className="px-2 py-1 bg-slate-800 rounded">6</kbd><span className="text-slate-400">Analysis Tools Tab</span></div>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-emerald-400 mb-2">Actions</h3>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between"><kbd className="px-2 py-1 bg-slate-800 rounded">Ctrl+E</kbd><span className="text-slate-400">Export CSV</span></div>
+                  <div className="flex justify-between"><kbd className="px-2 py-1 bg-slate-800 rounded">Ctrl+S</kbd><span className="text-slate-400">Save Bookmark</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex h-[calc(100vh-64px)]">
         {/* Left Panel - Controls */}
@@ -1268,7 +1388,7 @@ export default function LakeAnalysisPlatform() {
 
 // Stat Card Component
 function StatCard({ icon: Icon, label, value, sub, highlight }: {
-  icon: any;
+  icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string | number;
   sub?: string;
