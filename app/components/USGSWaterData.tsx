@@ -30,72 +30,53 @@ export default function USGSWaterData({ siteId, normalPoolElevation }: USGSWater
   const fetchWaterData = useCallback(async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
-      // Try to fetch real USGS data
-      // USGS Water Services API: https://waterservices.usgs.gov/nwis/iv/
-      // Parameter code 62614 = Lake or reservoir water surface elevation above NGVD 1929
-      // Parameter code 00065 = Gage height, feet
-      // Note: CORS may block this request in browser environments.
-      // For production, consider using a backend API proxy or Next.js API routes.
-      const response = await fetch(
-        `https://waterservices.usgs.gov/nwis/iv/?format=json&sites=${siteId}&parameterCd=62614,00065&period=P1D`,
-        { 
-          headers: {
-            'Accept': 'application/json',
-          },
-        }
-      );
-      
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Parse USGS response
-        if (data.value?.timeSeries?.[0]?.values?.[0]?.value) {
-          const values = data.value.timeSeries[0].values[0].value;
-          const latestValue = values[values.length - 1];
-          const previousValue = values.length > 1 ? values[0] : latestValue;
-          
-          const currentLevel = parseFloat(latestValue.value);
-          const previousLevel = parseFloat(previousValue.value);
-          const change = currentLevel - previousLevel;
-          
-          setWaterData({
-            value: currentLevel,
-            dateTime: latestValue.dateTime,
-            status: currentLevel > normalPoolElevation + 5 ? 'elevated' : 
-                    currentLevel < normalPoolElevation - 10 ? 'low' : 'normal',
-            trend: change > 0.1 ? 'rising' : change < -0.1 ? 'falling' : 'stable',
-            change24h: change,
-          });
-          setLastUpdated(new Date());
-          setLoading(false);
-          return;
-        }
+      // Use our API route to proxy USGS requests (avoids CORS issues)
+      const response = await fetch(`/api/usgs?site=${siteId}&period=P1D&parameterCd=00065,62614`);
+
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}`);
       }
-      
-      // Fallback to simulated data if API call fails
-      throw new Error('Using simulated data');
-      
+
+      const data = await response.json();
+
+      // Check for API error response
+      if (data.error) {
+        throw new Error(data.message || 'USGS data unavailable');
+      }
+
+      // Parse USGS response
+      if (data.value?.timeSeries?.[0]?.values?.[0]?.value) {
+        const values = data.value.timeSeries[0].values[0].value;
+        const latestValue = values[values.length - 1];
+        const previousValue = values.length > 1 ? values[0] : latestValue;
+
+        const currentLevel = parseFloat(latestValue.value);
+        const previousLevel = parseFloat(previousValue.value);
+        const change = currentLevel - previousLevel;
+
+        setWaterData({
+          value: currentLevel,
+          dateTime: latestValue.dateTime,
+          status: currentLevel > normalPoolElevation + 5 ? 'elevated' :
+                  currentLevel < normalPoolElevation - 10 ? 'low' : 'normal',
+          trend: change > 0.1 ? 'rising' : change < -0.1 ? 'falling' : 'stable',
+          change24h: change,
+        });
+        setLastUpdated(new Date());
+        setLoading(false);
+        return;
+      }
+
+      throw new Error('No data available from USGS');
+
     } catch (err) {
-      // Log the error for debugging purposes
-      console.debug('USGS API unavailable, using simulated data:', err instanceof Error ? err.message : 'Unknown error');
-      
-      // Use simulated realistic data for Sardis Lake
-      // Actual current pool elevation is typically around 598-599 ft
-      const simulatedLevel = 598.42 + (Math.random() * 0.5 - 0.25);
-      const change = (Math.random() * 0.4 - 0.2);
-      
-      setWaterData({
-        value: simulatedLevel,
-        dateTime: new Date().toISOString(),
-        status: simulatedLevel > normalPoolElevation ? 'elevated' : 
-                simulatedLevel < normalPoolElevation - 5 ? 'low' : 'normal',
-        trend: change > 0.05 ? 'rising' : change < -0.05 ? 'falling' : 'stable',
-        change24h: change,
-      });
-      setLastUpdated(new Date());
-      // Note: In production you might want to show this is simulated data
+      console.error('Failed to fetch USGS data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load water data');
+
+      // Don't use fake data - show the error state
+      setWaterData(null);
     } finally {
       setLoading(false);
     }

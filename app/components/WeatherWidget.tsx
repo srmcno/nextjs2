@@ -85,21 +85,18 @@ export default function WeatherWidget({ lat, lng, locationName }: WeatherWidgetP
     setError(null);
 
     try {
-      // Open-Meteo API - Free, no API key required
-      const response = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
-        `&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m,visibility,uv_index,is_day` +
-        `&hourly=temperature_2m,weather_code,precipitation_probability` +
-        `&daily=sunrise,sunset` +
-        `&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch` +
-        `&timezone=America/Chicago&forecast_days=1`
-      );
+      // Use our API route to fetch weather (handles any CORS issues)
+      const response = await fetch(`/api/weather?lat=${lat}&lng=${lng}&forecast=1`);
 
       if (!response.ok) {
         throw new Error('Weather data unavailable');
       }
 
       const data = await response.json();
+
+      if (data.error) {
+        throw new Error(data.message || 'Weather data unavailable');
+      }
 
       setWeather({
         temperature: data.current.temperature_2m,

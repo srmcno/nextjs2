@@ -19,8 +19,8 @@ interface LakeMapProps {
   mapStyle?: 'satellite' | 'terrain' | 'streets';
 }
 
-// Sardis Lake approximate boundary polygon (GeoJSON format - lng, lat order)
-const SARDIS_LAKE_POLYGON: [number, number][] = [
+// Fallback boundary polygon if API fails (GeoJSON format - lng, lat order)
+const FALLBACK_LAKE_POLYGON: [number, number][] = [
   [-95.3620, 34.6956],
   [-95.3502, 34.6912],
   [-95.3415, 34.6845],
@@ -127,6 +127,32 @@ export default function LakeMap({
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const [currentZoom, setCurrentZoom] = useState(12);
   const [currentStyle, setCurrentStyle] = useState(mapStyle);
+  const [lakePolygon, setLakePolygon] = useState<[number, number][]>(FALLBACK_LAKE_POLYGON);
+  const [boundarySource, setBoundarySource] = useState<'loading' | 'osm' | 'fallback'>('loading');
+
+  // Fetch real lake boundary from API
+  useEffect(() => {
+    const fetchBoundary = async () => {
+      try {
+        const response = await fetch(`/api/lake-boundary?name=${encodeURIComponent(lakeName)}&lat=${coordinates.lat}&lng=${coordinates.lng}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.features?.[0]?.geometry?.coordinates?.[0]) {
+            setLakePolygon(data.features[0].geometry.coordinates[0]);
+            setBoundarySource(data.meta?.source === 'OpenStreetMap' ? 'osm' : 'fallback');
+          } else {
+            setBoundarySource('fallback');
+          }
+        } else {
+          setBoundarySource('fallback');
+        }
+      } catch (err) {
+        console.error('Failed to fetch lake boundary:', err);
+        setBoundarySource('fallback');
+      }
+    };
+    fetchBoundary();
+  }, [lakeName, coordinates.lat, coordinates.lng]);
 
   // Function to add data layers - defined with useCallback to avoid re-creation
   const addDataLayers = useCallback((map: mapboxgl.Map) => {
@@ -163,7 +189,7 @@ export default function LakeMap({
           properties: { name: lakeName },
           geometry: {
             type: 'Polygon',
-            coordinates: [SARDIS_LAKE_POLYGON],
+            coordinates: [lakePolygon],
           },
         },
       });
@@ -255,7 +281,7 @@ export default function LakeMap({
         )
         .addTo(map);
     });
-  }, [lakeName, floodLevel, normalPoolElevation]);
+  }, [lakeName, floodLevel, normalPoolElevation, lakePolygon]);
 
   // Initialize map
   useEffect(() => {
@@ -363,7 +389,7 @@ export default function LakeMap({
 
         if (!map.getSource(sourceId)) {
           // Create scaled polygon for contour
-          const scaledPolygon = SARDIS_LAKE_POLYGON.map(([lng, lat]) => {
+          const scaledPolygon = lakePolygon.map(([lng, lat]) => {
             const centerLng = coordinates.lng;
             const centerLat = coordinates.lat;
             return [
@@ -455,7 +481,7 @@ export default function LakeMap({
         if (!map.getSource(floodSourceId)) {
           // Expand polygon based on flood level
           const expansionFactor = 1 + ((floodLevel - normalPoolElevation) / 50);
-          const expandedPolygon = SARDIS_LAKE_POLYGON.map(([lng, lat]) => {
+          const expandedPolygon = lakePolygon.map(([lng, lat]) => {
             const centerLng = coordinates.lng;
             const centerLat = coordinates.lat;
             return [
@@ -496,7 +522,7 @@ export default function LakeMap({
     } else {
       map.on('style.load', addAdditionalLayers);
     }
-  }, [coordinates, showContours, showZones, floodLevel, normalPoolElevation]);
+  }, [coordinates, showContours, showZones, floodLevel, normalPoolElevation, lakePolygon]);
 
   // Change map style
   const changeMapStyle = (style: 'satellite' | 'terrain' | 'streets') => {
@@ -567,9 +593,12 @@ export default function LakeMap({
           <div>LNG: {Math.abs(coordinates.lng).toFixed(4)}°W</div>
           {floodLevel > normalPoolElevation && (
             <div className="text-yellow-400 mt-1 flex items-center gap-1">
-              ⚠️ +{floodLevel - normalPoolElevation} ft above normal
+              {floodLevel - normalPoolElevation} ft above normal
             </div>
           )}
+          <div className="mt-1 text-slate-500 text-[10px]">
+            Boundary: {boundarySource === 'osm' ? 'OpenStreetMap' : boundarySource === 'fallback' ? 'Approximate' : 'Loading...'}
+          </div>
         </div>
       </div>
 

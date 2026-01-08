@@ -48,86 +48,59 @@ export default function WaterLevelChart({
     try {
       const period = timeRangeOptions.find(t => t.value === timeRange)?.period || 'P30D';
 
-      // USGS Water Services API for historical data
-      const response = await fetch(
-        `https://waterservices.usgs.gov/nwis/iv/?format=json&sites=${siteId}&parameterCd=62614,00065&period=${period}`,
-        {
-          headers: { 'Accept': 'application/json' },
-        }
-      );
+      // Use our API route to fetch USGS data
+      const response = await fetch(`/api/usgs?site=${siteId}&period=${period}&parameterCd=00065,62614`);
 
-      if (response.ok) {
-        const json = await response.json();
-
-        if (json.value?.timeSeries?.[0]?.values?.[0]?.value) {
-          const values = json.value.timeSeries[0].values[0].value;
-
-          // Sample data points to avoid overwhelming the chart (max ~100 points)
-          const sampleRate = Math.max(1, Math.floor(values.length / 100));
-          const sampledData: DataPoint[] = values
-            .filter((_: unknown, idx: number) => idx % sampleRate === 0)
-            .map((v: { dateTime: string; value: string }) => ({
-              date: v.dateTime,
-              value: parseFloat(v.value),
-            }));
-
-          setData(sampledData);
-
-          // Calculate statistics
-          const numericValues = sampledData.map((d: DataPoint) => d.value);
-          const min = Math.min(...numericValues);
-          const max = Math.max(...numericValues);
-          const avg = numericValues.reduce((a: number, b: number) => a + b, 0) / numericValues.length;
-          const current = numericValues[numericValues.length - 1];
-          const first = numericValues[0];
-
-          setStats({
-            min,
-            max,
-            avg,
-            current,
-            change: current - first,
-          });
-
-          setLoading(false);
-          return;
-        }
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}`);
       }
 
-      throw new Error('Data unavailable');
-    } catch (err) {
-      console.debug('USGS historical data unavailable:', err);
+      const json = await response.json();
 
-      // Generate simulated historical data
-      const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : 365;
-      const simulatedData: DataPoint[] = [];
-      const baseLevel = 598.5;
+      if (json.error) {
+        throw new Error(json.message || 'USGS data unavailable');
+      }
 
-      for (let i = days; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
+      if (json.value?.timeSeries?.[0]?.values?.[0]?.value) {
+        const values = json.value.timeSeries[0].values[0].value;
 
-        // Add some realistic seasonal variation and noise
-        const seasonalVariation = Math.sin((date.getMonth() / 12) * Math.PI * 2) * 2;
-        const noise = (Math.random() - 0.5) * 1.5;
-        const value = baseLevel + seasonalVariation + noise;
+        // Sample data points to avoid overwhelming the chart (max ~100 points)
+        const sampleRate = Math.max(1, Math.floor(values.length / 100));
+        const sampledData: DataPoint[] = values
+          .filter((_: unknown, idx: number) => idx % sampleRate === 0)
+          .map((v: { dateTime: string; value: string }) => ({
+            date: v.dateTime,
+            value: parseFloat(v.value),
+          }));
 
-        simulatedData.push({
-          date: date.toISOString(),
-          value: parseFloat(value.toFixed(2)),
+        setData(sampledData);
+
+        // Calculate statistics
+        const numericValues = sampledData.map((d: DataPoint) => d.value);
+        const min = Math.min(...numericValues);
+        const max = Math.max(...numericValues);
+        const avg = numericValues.reduce((a: number, b: number) => a + b, 0) / numericValues.length;
+        const current = numericValues[numericValues.length - 1];
+        const first = numericValues[0];
+
+        setStats({
+          min,
+          max,
+          avg,
+          current,
+          change: current - first,
         });
+
+        setLoading(false);
+        return;
       }
 
-      setData(simulatedData);
-
-      const numericValues = simulatedData.map(d => d.value);
-      setStats({
-        min: Math.min(...numericValues),
-        max: Math.max(...numericValues),
-        avg: numericValues.reduce((a, b) => a + b, 0) / numericValues.length,
-        current: numericValues[numericValues.length - 1],
-        change: numericValues[numericValues.length - 1] - numericValues[0],
-      });
+      throw new Error('No historical data available');
+    } catch (err) {
+      console.error('Failed to fetch historical data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load historical data');
+      setData([]);
+      setStats(null);
     } finally {
       setLoading(false);
     }

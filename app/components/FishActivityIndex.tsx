@@ -124,15 +124,19 @@ export default function FishActivityIndex({ lat, lng, waterTemp = 68 }: FishActi
     setLoading(true);
 
     try {
-      // Fetch weather data for fishing calculations
-      const response = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
-        `&current=temperature_2m,pressure_msl,wind_speed_10m,cloud_cover,precipitation` +
-        `&temperature_unit=fahrenheit&wind_speed_unit=mph` +
-        `&timezone=America/Chicago`
-      );
+      // Use our API route to fetch weather data
+      const response = await fetch(`/api/weather?lat=${lat}&lng=${lng}&forecast=1`);
+
+      if (!response.ok) {
+        throw new Error('Weather data unavailable');
+      }
 
       const weather = await response.json();
+
+      if (weather.error) {
+        throw new Error(weather.message || 'Weather data unavailable');
+      }
+
       const current = weather.current;
 
       const moonPhase = getMoonPhase(new Date());

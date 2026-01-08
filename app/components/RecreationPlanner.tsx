@@ -145,15 +145,18 @@ export default function RecreationPlanner({ lat, lng }: RecreationPlannerProps) 
     setLoading(true);
 
     try {
-      // Fetch weather and astronomical data
-      const response = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
-        `&daily=sunrise,sunset,temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code,wind_speed_10m_max,uv_index_max` +
-        `&temperature_unit=fahrenheit&wind_speed_unit=mph` +
-        `&timezone=America/Chicago&forecast_days=7`
-      );
+      // Use our API route to fetch weather
+      const response = await fetch(`/api/weather?lat=${lat}&lng=${lng}&forecast=7`);
+
+      if (!response.ok) {
+        throw new Error('Weather data unavailable');
+      }
 
       const data = await response.json();
+
+      if (data.error) {
+        throw new Error(data.message || 'Weather data unavailable');
+      }
       const today = new Date();
       const moonData = getMoonData(today);
 
