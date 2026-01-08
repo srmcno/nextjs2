@@ -1,7 +1,31 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { MapPin, Layers, TrendingUp, Building2, Droplets, Fish, TreePine, Mountain, Info, Download, Settings, BarChart3, Map, Navigation, Ruler, AlertTriangle, Sun, Wind, Activity, Database, FileText, Camera, Share2, Bookmark, Search, Eye, Plus, Minus, Crosshair, Globe, LayoutGrid, Maximize2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
+import { MapPin, Layers, TrendingUp, Building2, Droplets, Fish, TreePine, Mountain, Info, Download, Settings, BarChart3, Map, Navigation, Ruler, AlertTriangle, Sun, Wind, Activity, Database, FileText, Camera, Share2, Bookmark, Search, Eye, Globe, LayoutGrid } from 'lucide-react';
+
+// Dynamically import the map component to avoid SSR issues with Mapbox
+const LakeMap = dynamic(() => import('./components/LakeMapMapbox'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-full flex items-center justify-center bg-slate-900">
+      <div className="text-emerald-400 flex items-center gap-2">
+        <div className="w-6 h-6 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+        Loading interactive map...
+      </div>
+    </div>
+  ),
+});
+
+// Dynamically import USGS data component
+const USGSWaterData = dynamic(() => import('./components/USGSWaterData'), {
+  ssr: false,
+  loading: () => (
+    <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+      <div className="text-slate-400 text-sm animate-pulse">Loading water data...</div>
+    </div>
+  ),
+});
 
 // Sardis Lake Data
 const SARDIS_LAKE_DATA = {
@@ -22,7 +46,8 @@ const SARDIS_LAKE_DATA = {
   managedBy: "U.S. Army Corps of Engineers",
   primaryPurpose: "Water Supply",
   tributaries: ["Jackfork Creek"],
-  basin: "Kiamichi Basin"
+  basin: "Kiamichi Basin",
+  usgsSiteId: "07335700", // USGS monitoring site for Sardis Lake
 };
 
 // Elevation contour data (simulated)
@@ -78,19 +103,12 @@ export default function LakeAnalysisPlatform() {
   const [selectedElevation, setSelectedElevation] = useState(599);
   const [showContours, setShowContours] = useState(true);
   const [showZones, setShowZones] = useState(false);
-  const [mapStyle, setMapStyle] = useState('topographic');
   const [analysisMode, setAnalysisMode] = useState<string | null>(null);
-  const [measurePoints, setMeasurePoints] = useState<Array<{x: number, y: number, elevation?: number}>>([]);
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
   const [floodLevel, setFloodLevel] = useState(599);
-  const [panelExpanded, setPanelExpanded] = useState({ info: true, layers: false, analysis: false });
   const [searchQuery, setSearchQuery] = useState('');
   const [bookmarks, setBookmarks] = useState<Array<{id: string, name: string, tab: string, elevation: number}>>([]);
-  const [simulationRunning, setSimulationRunning] = useState(false);
-  const [mapZoom, setMapZoom] = useState(1);
-  const [mapPan, setMapPan] = useState({ x: 0, y: 0 });
   const [showHelp, setShowHelp] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Export functions
   const exportToPDF = () => {
@@ -149,18 +167,9 @@ export default function LakeAnalysisPlatform() {
   };
 
   const screenshotMap = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `lakescope-map-${new Date().toISOString().split('T')[0]}.png`;
-      a.click();
-      window.URL.revokeObjectURL(url);
-    });
+    // For Mapbox GL JS, we need to use the map's getCanvas method
+    // This is a simplified version that alerts the user about using the built-in fullscreen + screenshot
+    alert('To capture the map:\n\n1. Click the fullscreen button on the map\n2. Use your browser\'s screenshot feature (Print Screen or Cmd+Shift+4)\n\nAlternatively, right-click on the map and select "Save image as..." if available.');
   };
 
   const generateShareLink = () => {
@@ -191,23 +200,6 @@ export default function LakeAnalysisPlatform() {
     alert(`Bookmark "${viewName}" saved! Total bookmarks: ${bookmarks.length + 1}`);
   };
 
-  const zoomIn = useCallback(() => {
-    setMapZoom(prev => Math.min(prev + 0.2, 3));
-  }, []);
-
-  const zoomOut = useCallback(() => {
-    setMapZoom(prev => Math.max(prev - 0.2, 0.5));
-  }, []);
-
-  const resetView = useCallback(() => {
-    setMapZoom(1);
-    setMapPan({ x: 0, y: 0 });
-  }, []);
-
-  const centerMap = useCallback(() => {
-    setMapPan({ x: 0, y: 0 });
-  }, []);
-
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
@@ -220,24 +212,6 @@ export default function LakeAnalysisPlatform() {
         case '?':
           e.preventDefault();
           setShowHelp(!showHelp);
-          break;
-        case '+':
-        case '=':
-          e.preventDefault();
-          zoomIn();
-          break;
-        case '-':
-        case '_':
-          e.preventDefault();
-          zoomOut();
-          break;
-        case 'r':
-          e.preventDefault();
-          resetView();
-          break;
-        case 'c':
-          e.preventDefault();
-          centerMap();
           break;
         case '1':
           e.preventDefault();
@@ -280,7 +254,8 @@ export default function LakeAnalysisPlatform() {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [showHelp, zoomIn, zoomOut, resetView, centerMap, exportToCSV, saveCurrentView, setActiveTab]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showHelp]);
 
   // Calculate flood impact
   const calculateFloodImpact = useCallback((elevation: number) => {
@@ -294,192 +269,6 @@ export default function LakeAnalysisPlatform() {
 
   const floodImpact = calculateFloodImpact(floodLevel);
 
-  // Draw map visualization
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const width = canvas.width;
-    const height = canvas.height;
-
-    // Clear canvas
-    ctx.fillStyle = '#0f1419';
-    ctx.fillRect(0, 0, width, height);
-
-    // Apply zoom and pan transformations
-    ctx.save();
-    ctx.translate(width / 2 + mapPan.x, height / 2 + mapPan.y);
-    ctx.scale(mapZoom, mapZoom);
-    ctx.translate(-width / 2, -height / 2);
-
-    // Draw terrain background
-    const gradient = ctx.createRadialGradient(width/2, height/2, 0, width/2, height/2, 400);
-    gradient.addColorStop(0, '#1a2f23');
-    gradient.addColorStop(0.5, '#152419');
-    gradient.addColorStop(1, '#0f1419');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, width, height);
-
-    // Draw grid lines
-    ctx.strokeStyle = 'rgba(100, 200, 150, 0.1)';
-    ctx.lineWidth = 0.5;
-    for (let i = 0; i < width; i += 40) {
-      ctx.beginPath();
-      ctx.moveTo(i, 0);
-      ctx.lineTo(i, height);
-      ctx.stroke();
-    }
-    for (let i = 0; i < height; i += 40) {
-      ctx.beginPath();
-      ctx.moveTo(0, i);
-      ctx.lineTo(width, i);
-      ctx.stroke();
-    }
-
-    // Lake shape (stylized representation of Sardis Lake)
-    const centerX = width / 2;
-    const centerY = height / 2;
-    
-    if (showContours) {
-      // Draw elevation contours from deep to shallow
-      ELEVATION_CONTOURS.slice().reverse().forEach((contour, index) => {
-        if (contour.elevation <= floodLevel) {
-          const scale = 0.3 + (contour.elevation - 530) / 150;
-          ctx.save();
-          ctx.translate(centerX, centerY);
-          
-          ctx.beginPath();
-          // Create irregular lake shape
-          const points = 60;
-          for (let i = 0; i <= points; i++) {
-            const angle = (i / points) * Math.PI * 2;
-            const baseRadius = 120 * scale;
-            const variance = Math.sin(angle * 3) * 20 + Math.cos(angle * 5) * 15 + Math.sin(angle * 7) * 10;
-            const elongation = 1.4 + Math.sin(angle) * 0.3;
-            const r = (baseRadius + variance * scale) * elongation;
-            const x = Math.cos(angle) * r;
-            const y = Math.sin(angle) * r * 0.7;
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-          }
-          ctx.closePath();
-          
-          ctx.fillStyle = contour.color + (index === 0 ? 'ff' : 'cc');
-          ctx.fill();
-          
-          // Draw contour line
-          ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-          ctx.lineWidth = 1;
-          ctx.stroke();
-          
-          ctx.restore();
-        }
-      });
-    }
-
-    // Draw flood level indicator
-    if (floodLevel > 599) {
-      const floodScale = 0.3 + (floodLevel - 530) / 150;
-      ctx.save();
-      ctx.translate(centerX, centerY);
-      ctx.beginPath();
-      const points = 60;
-      for (let i = 0; i <= points; i++) {
-        const angle = (i / points) * Math.PI * 2;
-        const baseRadius = 120 * floodScale;
-        const variance = Math.sin(angle * 3) * 20 + Math.cos(angle * 5) * 15;
-        const elongation = 1.4 + Math.sin(angle) * 0.3;
-        const r = (baseRadius + variance * floodScale) * elongation;
-        const x = Math.cos(angle) * r;
-        const y = Math.sin(angle) * r * 0.7;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.closePath();
-      ctx.strokeStyle = '#ffc107';
-      ctx.lineWidth = 3;
-      ctx.setLineDash([10, 5]);
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    // Draw land use zones
-    if (showZones) {
-      const zonePositions = [
-        { x: centerX - 180, y: centerY - 100, w: 60, h: 80 },
-        { x: centerX + 140, y: centerY - 60, w: 70, h: 60 },
-        { x: centerX - 160, y: centerY + 80, w: 50, h: 50 },
-        { x: centerX + 100, y: centerY + 100, w: 80, h: 40 },
-        { x: centerX - 20, y: centerY - 180, w: 60, h: 40 },
-      ];
-      
-      LAND_USE_ZONES.forEach((zone, i) => {
-        const pos = zonePositions[i];
-        ctx.fillStyle = zone.color + '80';
-        ctx.fillRect(pos.x, pos.y, pos.w, pos.h);
-        ctx.strokeStyle = zone.color;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(pos.x, pos.y, pos.w, pos.h);
-      });
-    }
-
-    // Draw dam
-    ctx.save();
-    ctx.translate(centerX + 160, centerY + 30);
-    ctx.fillStyle = '#6b7280';
-    ctx.fillRect(-5, -30, 10, 60);
-    ctx.fillStyle = '#9ca3af';
-    ctx.fillRect(-8, -35, 16, 8);
-    ctx.restore();
-
-    // Draw compass rose
-    ctx.save();
-    ctx.translate(width - 50, 50);
-    ctx.strokeStyle = 'rgba(100, 200, 150, 0.6)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0, -20);
-    ctx.lineTo(0, 20);
-    ctx.moveTo(-20, 0);
-    ctx.lineTo(20, 0);
-    ctx.stroke();
-    ctx.fillStyle = '#64c896';
-    ctx.font = '12px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText('N', 0, -25);
-    ctx.restore();
-
-    // Draw scale bar
-    ctx.save();
-    ctx.translate(50, height - 30);
-    ctx.strokeStyle = 'rgba(100, 200, 150, 0.8)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(100, 0);
-    ctx.moveTo(0, -5);
-    ctx.lineTo(0, 5);
-    ctx.moveTo(100, -5);
-    ctx.lineTo(100, 5);
-    ctx.stroke();
-    ctx.fillStyle = '#64c896';
-    ctx.font = '10px monospace';
-    ctx.fillText('2 mi', 50, 15);
-    ctx.restore();
-
-    // Draw coordinate display
-    ctx.fillStyle = '#64c896';
-    ctx.font = '11px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText(`LAT: ${SARDIS_LAKE_DATA.coordinates.lat.toFixed(4)}°N`, 15, 25);
-    ctx.fillText(`LNG: ${Math.abs(SARDIS_LAKE_DATA.coordinates.lng).toFixed(4)}°W`, 15, 40);
-
-    // Restore transformation
-    ctx.restore();
-
-  }, [showContours, showZones, floodLevel, mapZoom, mapPan]);
-
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Globe },
     { id: 'elevation', label: 'Elevation', icon: Mountain },
@@ -488,10 +277,6 @@ export default function LakeAnalysisPlatform() {
     { id: 'water', label: 'Water Data', icon: Droplets },
     { id: 'analysis', label: 'Analysis Tools', icon: BarChart3 },
   ];
-
-  const togglePanel = (panel: 'info' | 'layers' | 'analysis') => {
-    setPanelExpanded(prev => ({ ...prev, [panel]: !prev[panel] }));
-  };
 
   const renderOverview = () => (
     <div className="space-y-4">
@@ -900,6 +685,13 @@ export default function LakeAnalysisPlatform() {
 
   const renderWater = () => (
     <div className="space-y-4">
+      {/* Real-time USGS Water Level Data */}
+      <USGSWaterData 
+        siteId={SARDIS_LAKE_DATA.usgsSiteId}
+        siteName={SARDIS_LAKE_DATA.name}
+        normalPoolElevation={SARDIS_LAKE_DATA.normalPoolElevation}
+      />
+
       <div className="grid grid-cols-2 gap-3">
         <StatCard icon={Activity} label="pH Level" value={WATER_QUALITY.ph} sub="neutral range" />
         <StatCard icon={Wind} label="Dissolved O₂" value={`${WATER_QUALITY.dissolvedOxygen} mg/L`} sub="healthy" />
@@ -1207,10 +999,9 @@ export default function LakeAnalysisPlatform() {
               <div>
                 <h3 className="text-sm font-semibold text-emerald-400 mb-2">Map Controls</h3>
                 <div className="space-y-1 text-sm">
-                  <div className="flex justify-between"><kbd className="px-2 py-1 bg-slate-800 rounded">+</kbd><span className="text-slate-400">Zoom In</span></div>
-                  <div className="flex justify-between"><kbd className="px-2 py-1 bg-slate-800 rounded">-</kbd><span className="text-slate-400">Zoom Out</span></div>
-                  <div className="flex justify-between"><kbd className="px-2 py-1 bg-slate-800 rounded">R</kbd><span className="text-slate-400">Reset View</span></div>
-                  <div className="flex justify-between"><kbd className="px-2 py-1 bg-slate-800 rounded">C</kbd><span className="text-slate-400">Center Map</span></div>
+                  <div className="flex justify-between"><span className="text-slate-300">Mouse wheel</span><span className="text-slate-400">Zoom In/Out</span></div>
+                  <div className="flex justify-between"><span className="text-slate-300">Click + Drag</span><span className="text-slate-400">Pan Map</span></div>
+                  <div className="flex justify-between"><span className="text-slate-300">Double-click</span><span className="text-slate-400">Zoom to Point</span></div>
                 </div>
               </div>
               <div>
@@ -1229,6 +1020,7 @@ export default function LakeAnalysisPlatform() {
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between"><kbd className="px-2 py-1 bg-slate-800 rounded">Ctrl+E</kbd><span className="text-slate-400">Export CSV</span></div>
                   <div className="flex justify-between"><kbd className="px-2 py-1 bg-slate-800 rounded">Ctrl+S</kbd><span className="text-slate-400">Save Bookmark</span></div>
+                  <div className="flex justify-between"><kbd className="px-2 py-1 bg-slate-800 rounded">?</kbd><span className="text-slate-400">Toggle Help</span></div>
                 </div>
               </div>
             </div>
@@ -1283,39 +1075,18 @@ export default function LakeAnalysisPlatform() {
 
         {/* Main Map Area */}
         <main className="flex-1 relative bg-[#0f1419]">
-          {/* Map Canvas */}
-          <canvas 
-            ref={canvasRef} 
-            width={900} 
-            height={700}
-            className="w-full h-full"
-            style={{ cursor: analysisMode ? 'crosshair' : 'grab' }}
+          {/* Interactive Leaflet Map */}
+          <LakeMap
+            coordinates={SARDIS_LAKE_DATA.coordinates}
+            lakeName={SARDIS_LAKE_DATA.name}
+            showContours={showContours}
+            showZones={showZones}
+            floodLevel={floodLevel}
+            normalPoolElevation={SARDIS_LAKE_DATA.normalPoolElevation}
           />
 
-          {/* Map Controls Overlay */}
-          <div className="absolute top-4 right-4 flex flex-col gap-2">
-            <div className="bg-slate-900/90 backdrop-blur border border-slate-700 rounded-lg overflow-hidden">
-              <button onClick={zoomIn} className="p-2 hover:bg-slate-800 transition-colors block" title="Zoom In">
-                <Plus className="w-5 h-5 text-slate-400" />
-              </button>
-              <div className="border-t border-slate-700" />
-              <button onClick={zoomOut} className="p-2 hover:bg-slate-800 transition-colors block" title="Zoom Out">
-                <Minus className="w-5 h-5 text-slate-400" />
-              </button>
-            </div>
-            <button onClick={centerMap} className="bg-slate-900/90 backdrop-blur border border-slate-700 rounded-lg p-2 hover:bg-slate-800 transition-colors" title="Center Map">
-              <Crosshair className="w-5 h-5 text-slate-400" />
-            </button>
-            <button onClick={resetView} className="bg-slate-900/90 backdrop-blur border border-slate-700 rounded-lg p-2 hover:bg-slate-800 transition-colors" title="Reset View">
-              <Maximize2 className="w-5 h-5 text-slate-400" />
-            </button>
-            <div className="bg-slate-900/90 backdrop-blur border border-slate-700 rounded-lg p-2 text-xs text-slate-400 text-center">
-              {(mapZoom * 100).toFixed(0)}%
-            </div>
-          </div>
-
           {/* Layer Toggle */}
-          <div className="absolute top-4 left-4 bg-slate-900/90 backdrop-blur border border-slate-700 rounded-lg p-3">
+          <div className="absolute top-4 left-4 z-[1001] bg-slate-900/90 backdrop-blur border border-slate-700 rounded-lg p-3">
             <div className="text-xs text-slate-400 mb-2 font-medium">Map Layers</div>
             <div className="space-y-2">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -1325,7 +1096,7 @@ export default function LakeAnalysisPlatform() {
                   onChange={() => setShowContours(!showContours)}
                   className="rounded border-slate-600 text-emerald-500 focus:ring-emerald-500 bg-slate-800"
                 />
-                <span className="text-sm text-slate-300">Elevation Contours</span>
+                <span className="text-sm text-slate-300">Depth Contours</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input 
@@ -1339,42 +1110,9 @@ export default function LakeAnalysisPlatform() {
             </div>
           </div>
 
-          {/* Current Elevation Info */}
-          <div className="absolute bottom-4 left-4 bg-slate-900/90 backdrop-blur border border-slate-700 rounded-lg p-3 max-w-xs">
-            <div className="flex items-center gap-2 mb-2">
-              <Activity className="w-4 h-4 text-cyan-400" />
-              <span className="text-sm text-slate-400">Current Status</span>
-            </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <div className="text-slate-500 text-xs">Pool Elevation</div>
-                <div className="text-cyan-400 font-mono">598.42 ft</div>
-              </div>
-              <div>
-                <div className="text-slate-500 text-xs">% Capacity</div>
-                <div className="text-emerald-400 font-mono">96.98%</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Contour Legend */}
-          {showContours && (
-            <div className="absolute bottom-4 right-4 bg-slate-900/90 backdrop-blur border border-slate-700 rounded-lg p-3">
-              <div className="text-xs text-slate-400 mb-2 font-medium">Depth Legend</div>
-              <div className="space-y-1">
-                {ELEVATION_CONTOURS.slice(0, 7).map((c) => (
-                  <div key={c.elevation} className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded" style={{ backgroundColor: c.color }} />
-                    <span className="text-xs text-slate-400">{c.depth > 0 ? `${c.depth}ft` : 'Surface'}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Analysis Mode Indicator */}
           {analysisMode && (
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-[1001]">
               <div className="bg-emerald-500/20 border border-emerald-500 rounded-lg px-4 py-2 text-emerald-400 text-sm animate-pulse">
                 {analysisMode.charAt(0).toUpperCase() + analysisMode.slice(1)} Mode Active
               </div>
