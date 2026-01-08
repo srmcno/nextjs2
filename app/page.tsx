@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MapPin, Layers, TrendingUp, Building2, Droplets, Fish, TreePine, Mountain, ChevronDown, ChevronUp, Info, Download, Settings, BarChart3, Map, Navigation, Ruler, AlertTriangle, Sun, Cloud, Wind, Activity, Database, FileText, Camera, Share2, Bookmark, Search, Filter, Eye, EyeOff, Plus, Minus, Crosshair, Globe, Compass, LayoutGrid, Maximize2 } from 'lucide-react';
 
@@ -77,18 +79,18 @@ export default function LakeAnalysisPlatform() {
   const [showContours, setShowContours] = useState(true);
   const [showZones, setShowZones] = useState(false);
   const [mapStyle, setMapStyle] = useState('topographic');
-  const [analysisMode, setAnalysisMode] = useState(null);
+  const [analysisMode, setAnalysisMode] = useState<string | null>(null);
   const [measurePoints, setMeasurePoints] = useState([]);
-  const [selectedZone, setSelectedZone] = useState(null);
+  const [selectedZone, setSelectedZone] = useState<string | null>(null);
   const [floodLevel, setFloodLevel] = useState(599);
   const [panelExpanded, setPanelExpanded] = useState({ info: true, layers: false, analysis: false });
   const [searchQuery, setSearchQuery] = useState('');
   const [bookmarks, setBookmarks] = useState([]);
   const [simulationRunning, setSimulationRunning] = useState(false);
-  const canvasRef = useRef(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Calculate flood impact
-  const calculateFloodImpact = useCallback((elevation) => {
+  const calculateFloodImpact = useCallback((elevation: number) => {
     const normalPool = SARDIS_LAKE_DATA.normalPoolElevation;
     const difference = elevation - normalPool;
     const additionalAcres = difference > 0 ? Math.round(difference * 180) : 0;
@@ -104,6 +106,7 @@ export default function LakeAnalysisPlatform() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;
     const width = canvas.width;
     const height = canvas.height;
 
@@ -284,7 +287,7 @@ export default function LakeAnalysisPlatform() {
     { id: 'analysis', label: 'Analysis Tools', icon: BarChart3 },
   ];
 
-  const togglePanel = (panel) => {
+  const togglePanel = (panel: 'info' | 'layers' | 'analysis') => {
     setPanelExpanded(prev => ({ ...prev, [panel]: !prev[panel] }));
   };
 
@@ -1113,7 +1116,13 @@ export default function LakeAnalysisPlatform() {
 }
 
 // Stat Card Component
-function StatCard({ icon: Icon, label, value, sub, highlight }) {
+function StatCard({ icon: Icon, label, value, sub, highlight }: {
+  icon: any;
+  label: string;
+  value: string | number;
+  sub?: string;
+  highlight?: boolean;
+}) {
   return (
     <div className={`p-3 rounded-lg border transition-all ${
       highlight 
