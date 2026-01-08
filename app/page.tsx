@@ -80,7 +80,7 @@ export default function LakeAnalysisPlatform() {
   const [showZones, setShowZones] = useState(false);
   const [mapStyle, setMapStyle] = useState('topographic');
   const [analysisMode, setAnalysisMode] = useState<string | null>(null);
-  const [measurePoints, setMeasurePoints] = useState([]);
+  const [measurePoints, setMeasurePoints] = useState<Array<{x: number, y: number, elevation?: number}>>([]);
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
   const [floodLevel, setFloodLevel] = useState(599);
   const [panelExpanded, setPanelExpanded] = useState({ info: true, layers: false, analysis: false });
@@ -191,22 +191,22 @@ export default function LakeAnalysisPlatform() {
     alert(`Bookmark "${viewName}" saved! Total bookmarks: ${bookmarks.length + 1}`);
   };
 
-  const zoomIn = () => {
+  const zoomIn = useCallback(() => {
     setMapZoom(prev => Math.min(prev + 0.2, 3));
-  };
+  }, []);
 
-  const zoomOut = () => {
+  const zoomOut = useCallback(() => {
     setMapZoom(prev => Math.max(prev - 0.2, 0.5));
-  };
+  }, []);
 
-  const resetView = () => {
+  const resetView = useCallback(() => {
     setMapZoom(1);
     setMapPan({ x: 0, y: 0 });
-  };
+  }, []);
 
-  const centerMap = () => {
+  const centerMap = useCallback(() => {
     setMapPan({ x: 0, y: 0 });
-  };
+  }, []);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -280,7 +280,7 @@ export default function LakeAnalysisPlatform() {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [showHelp]);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showHelp, zoomIn, zoomOut, resetView, centerMap, exportToCSV, saveCurrentView, setActiveTab]);
 
   // Calculate flood impact
   const calculateFloodImpact = useCallback((elevation: number) => {
