@@ -85,9 +85,127 @@ export default function LakeAnalysisPlatform() {
   const [floodLevel, setFloodLevel] = useState(599);
   const [panelExpanded, setPanelExpanded] = useState({ info: true, layers: false, analysis: false });
   const [searchQuery, setSearchQuery] = useState('');
-  const [bookmarks, setBookmarks] = useState([]);
+  const [bookmarks, setBookmarks] = useState<Array<{id: string, name: string, tab: string, elevation: number}>>([]);
   const [simulationRunning, setSimulationRunning] = useState(false);
+  const [mapZoom, setMapZoom] = useState(1);
+  const [mapPan, setMapPan] = useState({ x: 0, y: 0 });
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Export functions
+  const exportToPDF = () => {
+    alert('PDF Export: This would generate a comprehensive report with all lake data, visualizations, and analysis. In a production app, this would use a library like jsPDF or react-pdf.');
+  };
+
+  const exportToCSV = () => {
+    const csvData = [
+      ['Metric', 'Value', 'Unit'],
+      ['Surface Area', SARDIS_LAKE_DATA.surfaceArea, 'acres'],
+      ['Shoreline', SARDIS_LAKE_DATA.shorelineLength, 'miles'],
+      ['Max Depth', SARDIS_LAKE_DATA.maxDepth, 'feet'],
+      ['Volume', SARDIS_LAKE_DATA.volume, 'acre-feet'],
+      ['Normal Pool Elevation', SARDIS_LAKE_DATA.normalPoolElevation, 'feet'],
+      ['Annual Visitors', ECONOMIC_DATA.annualVisitors, 'visitors'],
+      ['Economic Impact', ECONOMIC_DATA.economicImpact, 'millions USD'],
+    ];
+    
+    const csv = csvData.map(row => row.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sardis-lake-data-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const exportToGeoJSON = () => {
+    const geoJSON = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {
+            name: SARDIS_LAKE_DATA.name,
+            state: SARDIS_LAKE_DATA.state,
+            surfaceArea: SARDIS_LAKE_DATA.surfaceArea,
+            elevation: SARDIS_LAKE_DATA.normalPoolElevation,
+          },
+          geometry: {
+            type: 'Point',
+            coordinates: [SARDIS_LAKE_DATA.coordinates.lng, SARDIS_LAKE_DATA.coordinates.lat]
+          }
+        }
+      ]
+    };
+    
+    const blob = new Blob([JSON.stringify(geoJSON, null, 2)], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'sardis-lake.geojson';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const screenshotMap = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `lakescope-map-${new Date().toISOString().split('T')[0]}.png`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    });
+  };
+
+  const generateShareLink = () => {
+    const params = new URLSearchParams({
+      tab: activeTab,
+      elevation: selectedElevation.toString(),
+      floodLevel: floodLevel.toString(),
+      contours: showContours.toString(),
+      zones: showZones.toString(),
+    });
+    const shareUrl = `${window.location.origin}?${params.toString()}`;
+    navigator.clipboard.writeText(shareUrl);
+    alert(`Share link copied to clipboard!\n\n${shareUrl}`);
+  };
+
+  const saveCurrentView = () => {
+    const viewName = prompt('Enter a name for this bookmark:');
+    if (!viewName) return;
+    
+    const newBookmark = {
+      id: Date.now().toString(),
+      name: viewName,
+      tab: activeTab,
+      elevation: selectedElevation,
+    };
+    
+    setBookmarks([...bookmarks, newBookmark]);
+    alert(`Bookmark "${viewName}" saved! Total bookmarks: ${bookmarks.length + 1}`);
+  };
+
+  const zoomIn = () => {
+    setMapZoom(prev => Math.min(prev + 0.2, 3));
+  };
+
+  const zoomOut = () => {
+    setMapZoom(prev => Math.max(prev - 0.2, 0.5));
+  };
+
+  const resetView = () => {
+    setMapZoom(1);
+    setMapPan({ x: 0, y: 0 });
+  };
+
+  const centerMap = () => {
+    setMapPan({ x: 0, y: 0 });
+  };
 
   // Calculate flood impact
   const calculateFloodImpact = useCallback((elevation: number) => {
@@ -113,6 +231,12 @@ export default function LakeAnalysisPlatform() {
     // Clear canvas
     ctx.fillStyle = '#0f1419';
     ctx.fillRect(0, 0, width, height);
+
+    // Apply zoom and pan transformations
+    ctx.save();
+    ctx.translate(width / 2 + mapPan.x, height / 2 + mapPan.y);
+    ctx.scale(mapZoom, mapZoom);
+    ctx.translate(-width / 2, -height / 2);
 
     // Draw terrain background
     const gradient = ctx.createRadialGradient(width/2, height/2, 0, width/2, height/2, 400);
@@ -276,7 +400,10 @@ export default function LakeAnalysisPlatform() {
     ctx.fillText(`LAT: ${SARDIS_LAKE_DATA.coordinates.lat.toFixed(4)}°N`, 15, 25);
     ctx.fillText(`LNG: ${Math.abs(SARDIS_LAKE_DATA.coordinates.lng).toFixed(4)}°W`, 15, 40);
 
-  }, [showContours, showZones, floodLevel]);
+    // Restore transformation
+    ctx.restore();
+
+  }, [showContours, showZones, floodLevel, mapZoom, mapPan]);
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Globe },
@@ -904,16 +1031,16 @@ export default function LakeAnalysisPlatform() {
           <Download className="w-4 h-4" /> Export Options
         </h4>
         <div className="space-y-2">
-          <button className="w-full p-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-300 flex items-center gap-2 justify-center transition-colors">
+          <button onClick={exportToPDF} className="w-full p-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-300 flex items-center gap-2 justify-center transition-colors">
             <FileText className="w-4 h-4" /> Export Report (PDF)
           </button>
-          <button className="w-full p-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-300 flex items-center gap-2 justify-center transition-colors">
+          <button onClick={exportToCSV} className="w-full p-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-300 flex items-center gap-2 justify-center transition-colors">
             <Database className="w-4 h-4" /> Export Data (CSV)
           </button>
-          <button className="w-full p-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-300 flex items-center gap-2 justify-center transition-colors">
+          <button onClick={exportToGeoJSON} className="w-full p-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-300 flex items-center gap-2 justify-center transition-colors">
             <Map className="w-4 h-4" /> Export Map (GeoJSON)
           </button>
-          <button className="w-full p-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-300 flex items-center gap-2 justify-center transition-colors">
+          <button onClick={screenshotMap} className="w-full p-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-300 flex items-center gap-2 justify-center transition-colors">
             <Camera className="w-4 h-4" /> Screenshot Map
           </button>
         </div>
@@ -924,13 +1051,34 @@ export default function LakeAnalysisPlatform() {
           <Share2 className="w-4 h-4" /> Share & Collaborate
         </h4>
         <div className="space-y-2">
-          <button className="w-full p-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-300 flex items-center gap-2 justify-center transition-colors">
+          <button onClick={generateShareLink} className="w-full p-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-300 flex items-center gap-2 justify-center transition-colors">
             <Share2 className="w-4 h-4" /> Generate Share Link
           </button>
-          <button className="w-full p-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-300 flex items-center gap-2 justify-center transition-colors">
+          <button onClick={saveCurrentView} className="w-full p-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-300 flex items-center gap-2 justify-center transition-colors">
             <Bookmark className="w-4 h-4" /> Save Current View
           </button>
         </div>
+        {bookmarks.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-slate-700">
+            <div className="text-xs text-slate-400 mb-2">Saved Bookmarks ({bookmarks.length})</div>
+            <div className="space-y-1 max-h-32 overflow-y-auto">
+              {bookmarks.map((bookmark) => (
+                <div key={bookmark.id} className="text-xs text-slate-300 p-1 bg-slate-900 rounded flex justify-between items-center">
+                  <span className="truncate flex-1">{bookmark.name}</span>
+                  <button 
+                    onClick={() => {
+                      setActiveTab(bookmark.tab);
+                      setSelectedElevation(bookmark.elevation);
+                    }}
+                    className="text-emerald-400 hover:text-emerald-300 ml-2"
+                  >
+                    Load
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1027,20 +1175,23 @@ export default function LakeAnalysisPlatform() {
           {/* Map Controls Overlay */}
           <div className="absolute top-4 right-4 flex flex-col gap-2">
             <div className="bg-slate-900/90 backdrop-blur border border-slate-700 rounded-lg overflow-hidden">
-              <button className="p-2 hover:bg-slate-800 transition-colors block">
+              <button onClick={zoomIn} className="p-2 hover:bg-slate-800 transition-colors block" title="Zoom In">
                 <Plus className="w-5 h-5 text-slate-400" />
               </button>
               <div className="border-t border-slate-700" />
-              <button className="p-2 hover:bg-slate-800 transition-colors block">
+              <button onClick={zoomOut} className="p-2 hover:bg-slate-800 transition-colors block" title="Zoom Out">
                 <Minus className="w-5 h-5 text-slate-400" />
               </button>
             </div>
-            <button className="bg-slate-900/90 backdrop-blur border border-slate-700 rounded-lg p-2 hover:bg-slate-800 transition-colors">
+            <button onClick={centerMap} className="bg-slate-900/90 backdrop-blur border border-slate-700 rounded-lg p-2 hover:bg-slate-800 transition-colors" title="Center Map">
               <Crosshair className="w-5 h-5 text-slate-400" />
             </button>
-            <button className="bg-slate-900/90 backdrop-blur border border-slate-700 rounded-lg p-2 hover:bg-slate-800 transition-colors">
+            <button onClick={resetView} className="bg-slate-900/90 backdrop-blur border border-slate-700 rounded-lg p-2 hover:bg-slate-800 transition-colors" title="Reset View">
               <Maximize2 className="w-5 h-5 text-slate-400" />
             </button>
+            <div className="bg-slate-900/90 backdrop-blur border border-slate-700 rounded-lg p-2 text-xs text-slate-400 text-center">
+              {(mapZoom * 100).toFixed(0)}%
+            </div>
           </div>
 
           {/* Layer Toggle */}
