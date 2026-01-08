@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
-import { MapPin, Layers, TrendingUp, Building2, Droplets, Fish, TreePine, Mountain, Info, Download, Settings, BarChart3, Map, Navigation, Ruler, AlertTriangle, Sun, Wind, Activity, Database, FileText, Camera, Share2, Bookmark, Search, Eye, Globe, LayoutGrid } from 'lucide-react';
+import { MapPin, Layers, TrendingUp, Building2, Droplets, Fish, TreePine, Mountain, Info, Download, Settings, BarChart3, Map, Navigation, Ruler, AlertTriangle, Sun, Wind, Activity, Database, FileText, Camera, Share2, Bookmark, Search, Eye, Globe, LayoutGrid, Anchor, Tent } from 'lucide-react';
 
 // Dynamically import the map component to avoid SSR issues with Mapbox
 const LakeMap = dynamic(() => import('./components/LakeMapMapbox'), {
@@ -23,6 +23,56 @@ const USGSWaterData = dynamic(() => import('./components/USGSWaterData'), {
   loading: () => (
     <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
       <div className="text-slate-400 text-sm animate-pulse">Loading water data...</div>
+    </div>
+  ),
+});
+
+// Dynamically import Weather widget
+const WeatherWidget = dynamic(() => import('./components/WeatherWidget'), {
+  ssr: false,
+  loading: () => (
+    <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+      <div className="text-slate-400 text-sm animate-pulse">Loading weather...</div>
+    </div>
+  ),
+});
+
+// Dynamically import Historical Water Level Chart
+const WaterLevelChart = dynamic(() => import('./components/WaterLevelChart'), {
+  ssr: false,
+  loading: () => (
+    <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+      <div className="text-slate-400 text-sm animate-pulse">Loading chart...</div>
+    </div>
+  ),
+});
+
+// Dynamically import Fish Activity Index
+const FishActivityIndex = dynamic(() => import('./components/FishActivityIndex'), {
+  ssr: false,
+  loading: () => (
+    <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+      <div className="text-slate-400 text-sm animate-pulse">Loading fishing data...</div>
+    </div>
+  ),
+});
+
+// Dynamically import Boat Ramp Status
+const BoatRampStatus = dynamic(() => import('./components/BoatRampStatus'), {
+  ssr: false,
+  loading: () => (
+    <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+      <div className="text-slate-400 text-sm animate-pulse">Loading boat ramps...</div>
+    </div>
+  ),
+});
+
+// Dynamically import Recreation Planner
+const RecreationPlanner = dynamic(() => import('./components/RecreationPlanner'), {
+  ssr: false,
+  loading: () => (
+    <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+      <div className="text-slate-400 text-sm animate-pulse">Loading planner...</div>
     </div>
   ),
 });
@@ -271,10 +321,11 @@ export default function LakeAnalysisPlatform() {
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Globe },
+    { id: 'water', label: 'Water Data', icon: Droplets },
+    { id: 'recreation', label: 'Recreation', icon: Tent },
     { id: 'elevation', label: 'Elevation', icon: Mountain },
     { id: 'economic', label: 'Economic', icon: TrendingUp },
     { id: 'planning', label: 'Land Planning', icon: Building2 },
-    { id: 'water', label: 'Water Data', icon: Droplets },
     { id: 'analysis', label: 'Analysis Tools', icon: BarChart3 },
   ];
 
@@ -685,11 +736,25 @@ export default function LakeAnalysisPlatform() {
 
   const renderWater = () => (
     <div className="space-y-4">
+      {/* Real-time Weather */}
+      <WeatherWidget
+        lat={SARDIS_LAKE_DATA.coordinates.lat}
+        lng={SARDIS_LAKE_DATA.coordinates.lng}
+        locationName={SARDIS_LAKE_DATA.name}
+      />
+
       {/* Real-time USGS Water Level Data */}
-      <USGSWaterData 
+      <USGSWaterData
         siteId={SARDIS_LAKE_DATA.usgsSiteId}
         siteName={SARDIS_LAKE_DATA.name}
         normalPoolElevation={SARDIS_LAKE_DATA.normalPoolElevation}
+      />
+
+      {/* Historical Water Levels Chart */}
+      <WaterLevelChart
+        siteId={SARDIS_LAKE_DATA.usgsSiteId}
+        normalPoolElevation={SARDIS_LAKE_DATA.normalPoolElevation}
+        floodStageElevation={SARDIS_LAKE_DATA.floodStageElevation}
       />
 
       <div className="grid grid-cols-2 gap-3">
@@ -712,7 +777,7 @@ export default function LakeAnalysisPlatform() {
             {WATER_QUALITY.rating}
           </span>
         </div>
-        
+
         <div className="space-y-3">
           {[
             { label: 'Secchi Depth (Clarity)', value: WATER_QUALITY.secchiDepth, max: 15, unit: 'ft' },
@@ -725,7 +790,7 @@ export default function LakeAnalysisPlatform() {
                 <span className="text-slate-400 font-mono">{item.value} {item.unit}</span>
               </div>
               <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                <div 
+                <div
                   className="h-full bg-cyan-500 rounded-full"
                   style={{ width: `${(item.value / item.max) * 100}%` }}
                 />
@@ -741,7 +806,7 @@ export default function LakeAnalysisPlatform() {
         </h4>
         <div className="relative">
           <div className="h-24 bg-slate-900 rounded-lg overflow-hidden relative">
-            <div 
+            <div
               className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-cyan-600 to-cyan-400 transition-all duration-500"
               style={{ height: '97%' }}
             />
@@ -755,56 +820,75 @@ export default function LakeAnalysisPlatform() {
           </div>
         </div>
       </div>
+    </div>
+  );
 
-      <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-        <h4 className="text-emerald-400 font-semibold mb-3">Monthly Trends</h4>
-        <div className="h-32 bg-slate-900 rounded p-2">
-          <svg viewBox="0 0 300 100" className="w-full h-full">
-            {/* Temperature line */}
-            <path 
-              d="M 20,80 L 45,75 L 70,65 L 95,50 L 120,40 L 145,35 L 170,35 L 195,40 L 220,50 L 245,65 L 270,75 L 295,80" 
-              fill="none" 
-              stroke="#f97316" 
-              strokeWidth="2"
-            />
-            
-            {/* Water level line */}
-            <path 
-              d="M 20,45 L 45,48 L 70,50 L 95,48 L 120,42 L 145,38 L 170,40 L 195,45 L 220,48 L 245,46 L 270,44 L 295,45" 
-              fill="none" 
-              stroke="#06b6d4" 
-              strokeWidth="2"
-            />
-            
-            {/* Legend */}
-            <circle cx="230" cy="10" r="3" fill="#f97316" />
-            <text x="238" y="13" fill="#94a3b8" fontSize="8">Temp</text>
-            <circle cx="270" cy="10" r="3" fill="#06b6d4" />
-            <text x="278" y="13" fill="#94a3b8" fontSize="8">Level</text>
-            
-            {/* Month labels */}
-            <text x="20" y="98" fill="#64748b" fontSize="7">J</text>
-            <text x="70" y="98" fill="#64748b" fontSize="7">M</text>
-            <text x="120" y="98" fill="#64748b" fontSize="7">M</text>
-            <text x="170" y="98" fill="#64748b" fontSize="7">J</text>
-            <text x="220" y="98" fill="#64748b" fontSize="7">S</text>
-            <text x="270" y="98" fill="#64748b" fontSize="7">N</text>
-          </svg>
-        </div>
-      </div>
+  const renderRecreation = () => (
+    <div className="space-y-4">
+      {/* Recreation Planner with Sun/Moon Data */}
+      <RecreationPlanner
+        lat={SARDIS_LAKE_DATA.coordinates.lat}
+        lng={SARDIS_LAKE_DATA.coordinates.lng}
+      />
 
+      {/* Fishing Activity Index */}
+      <FishActivityIndex
+        lat={SARDIS_LAKE_DATA.coordinates.lat}
+        lng={SARDIS_LAKE_DATA.coordinates.lng}
+        waterTemp={WATER_QUALITY.temperature}
+      />
+
+      {/* Boat Ramp Status */}
+      <BoatRampStatus
+        currentElevation={598.42}
+        normalPoolElevation={SARDIS_LAKE_DATA.normalPoolElevation}
+      />
+
+      {/* Fish Species */}
       <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
         <h4 className="text-emerald-400 font-semibold mb-3 flex items-center gap-2">
-          <Fish className="w-4 h-4" /> Fish & Wildlife
+          <Fish className="w-4 h-4" /> Fish Species
         </h4>
         <div className="grid grid-cols-2 gap-2 text-sm">
           {[
-            'Largemouth Bass', 'Channel Catfish', 'Blue Catfish', 
-            'Crappie', 'Bluegill', 'Threadfin Shad'
+            { name: 'Largemouth Bass', season: 'Year-round' },
+            { name: 'Channel Catfish', season: 'Apr-Oct' },
+            { name: 'Blue Catfish', season: 'Year-round' },
+            { name: 'Crappie', season: 'Mar-May' },
+            { name: 'Bluegill', season: 'May-Sep' },
+            { name: 'Striped Bass', season: 'Oct-Mar' },
           ].map((fish) => (
-            <div key={fish} className="flex items-center gap-2 text-slate-300">
-              <Fish className="w-3 h-3 text-cyan-400" />
-              {fish}
+            <div key={fish.name} className="flex items-center justify-between p-2 bg-slate-900/50 rounded">
+              <span className="flex items-center gap-2 text-slate-300">
+                <Fish className="w-3 h-3 text-cyan-400" />
+                {fish.name}
+              </span>
+              <span className="text-xs text-slate-500">{fish.season}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Recreation Areas */}
+      <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+        <h4 className="text-emerald-400 font-semibold mb-3 flex items-center gap-2">
+          <Tent className="w-4 h-4" /> Recreation Areas
+        </h4>
+        <div className="space-y-2">
+          {[
+            { name: 'Potato Hills North', type: 'Camping, Boat Ramp', status: 'Open' },
+            { name: 'Potato Hills South', type: 'Day Use, Picnic', status: 'Open' },
+            { name: 'Sardis Cove Marina', type: 'Full Service Marina', status: 'Open' },
+            { name: 'Billy Creek', type: 'Primitive Camping', status: 'Open' },
+          ].map((area) => (
+            <div key={area.name} className="flex items-center justify-between p-2 bg-slate-900/50 rounded">
+              <div>
+                <div className="text-slate-200 text-sm">{area.name}</div>
+                <div className="text-slate-500 text-xs">{area.type}</div>
+              </div>
+              <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-xs rounded">
+                {area.status}
+              </span>
             </div>
           ))}
         </div>
@@ -1064,10 +1148,11 @@ export default function LakeAnalysisPlatform() {
             {/* Tab Content */}
             <div className="space-y-4">
               {activeTab === 'overview' && renderOverview()}
+              {activeTab === 'water' && renderWater()}
+              {activeTab === 'recreation' && renderRecreation()}
               {activeTab === 'elevation' && renderElevation()}
               {activeTab === 'economic' && renderEconomic()}
               {activeTab === 'planning' && renderPlanning()}
-              {activeTab === 'water' && renderWater()}
               {activeTab === 'analysis' && renderAnalysis()}
             </div>
           </div>
